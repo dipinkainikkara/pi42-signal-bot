@@ -74,10 +74,36 @@ while True:
                     symbol=market_symbol
                 )
 
+                # =========================
+                # EMPTY DATA PROTECTION
+                # =========================
+
+                if df.empty:
+
+                    print(
+                        f"No candle data for {display_symbol}",
+                        flush=True
+                    )
+
+                    continue
+
                 print(
                     f"Fetched {len(df)} candles",
                     flush=True
                 )
+
+                # =========================
+                # NOT ENOUGH DATA
+                # =========================
+
+                if len(df) < 50:
+
+                    print(
+                        f"Not enough candles for {display_symbol}",
+                        flush=True
+                    )
+
+                    continue
 
                 # =========================
                 # ANALYZE STRATEGY
@@ -96,10 +122,23 @@ while True:
                 )
 
                 # =========================
+                # INVALID RESULT
+                # =========================
+
+                if not result:
+
+                    print(
+                        f"No analysis result for {display_symbol}",
+                        flush=True
+                    )
+
+                    continue
+
+                # =========================
                 # NO SIGNAL
                 # =========================
 
-                if not result["signal"]:
+                if not result.get("signal"):
 
                     print(
                         f"No signal for {display_symbol}",
@@ -127,13 +166,16 @@ while True:
 
                     continue
 
-                # Save latest signal
+                # =========================
+                # SAVE SIGNAL
+                # =========================
+
                 signal_state.last_signals[
                     display_symbol
                 ] = result["signal"]
 
                 # =========================
-                # USD → INR CONVERSION
+                # INR CONVERSION
                 # =========================
 
                 print(

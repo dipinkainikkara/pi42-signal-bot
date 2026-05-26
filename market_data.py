@@ -3,58 +3,148 @@ import pandas as pd
 
 
 # =========================
-# FETCH CRYPTO CANDLES
+# FETCH CANDLES
 # =========================
 
-def get_candles(symbol="ETHUSDT", interval="15m", limit=200):
+def get_candles(
 
-    url = "https://api.binance.com/api/v3/klines"
+    symbol="BTCUSDT",
+    interval="15m",
+    limit=200
 
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "limit": limit
-    }
+):
 
-    response = requests.get(
-        url,
-        params=params
-    )
+    try:
 
-    data = response.json()
+        url = "https://api.binance.com/api/v3/klines"
 
-    df = pd.DataFrame(data, columns=[
+        headers = {
 
-        "open_time",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "close_time",
-        "quote_asset_volume",
-        "number_of_trades",
-        "taker_buy_base",
-        "taker_buy_quote",
-        "ignore"
-    ])
+            "User-Agent":
+            "Mozilla/5.0"
+        }
 
-    numeric_cols = [
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume"
-    ]
+        params = {
 
-    for col in numeric_cols:
-        df[col] = df[col].astype(float)
+            "symbol": symbol,
+            "interval": interval,
+            "limit": limit
+        }
 
-    return df
+        response = requests.get(
+
+            url,
+
+            params=params,
+
+            headers=headers,
+
+            timeout=15
+        )
+
+        print(
+            f"Binance Status Code: {response.status_code}",
+            flush=True
+        )
+
+        # =========================
+        # INVALID RESPONSE
+        # =========================
+
+        if response.status_code != 200:
+
+            print(
+                f"Binance Error: {response.text}",
+                flush=True
+            )
+
+            return pd.DataFrame()
+
+        data = response.json()
+
+        # =========================
+        # EMPTY DATA
+        # =========================
+
+        if not data:
+
+            print(
+                "No candle data returned",
+                flush=True
+            )
+
+            return pd.DataFrame()
+
+        # =========================
+        # CREATE DATAFRAME
+        # =========================
+
+        df = pd.DataFrame(
+
+            data,
+
+            columns=[
+
+                "open_time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "close_time",
+                "quote_asset_volume",
+                "number_of_trades",
+                "taker_buy_base",
+                "taker_buy_quote",
+                "ignore"
+            ]
+        )
+
+        # =========================
+        # CONVERT NUMBERS
+        # =========================
+
+        numeric_columns = [
+
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ]
+
+        for col in numeric_columns:
+
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
+
+        # =========================
+        # DROP BAD ROWS
+        # =========================
+
+        df.dropna(inplace=True)
+
+        print(
+            f"Final candles count: {len(df)}",
+            flush=True
+        )
+
+        return df
+
+    except Exception as e:
+
+        print(
+            f"Market data error: {e}",
+            flush=True
+        )
+
+        return pd.DataFrame()
 
 
 # =========================
-# USD TO INR RATE
+# USD → INR
 # =========================
 
 def get_usdtinr_rate():
@@ -63,13 +153,24 @@ def get_usdtinr_rate():
 
         url = "https://api.exchangerate-api.com/v4/latest/USD"
 
-        response = requests.get(url)
+        response = requests.get(
+
+            url,
+
+            timeout=10
+        )
 
         data = response.json()
 
-        return data["rates"]["INR"]
+        rate = data["rates"]["INR"]
 
-    except:
+        return float(rate)
 
-        # fallback rate
+    except Exception as e:
+
+        print(
+            f"USDINR API Error: {e}",
+            flush=True
+        )
+
         return 83.0
