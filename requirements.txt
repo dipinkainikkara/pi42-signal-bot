@@ -1,11 +1,9 @@
-fastapi
-uvicorn
 pandas
 numpy
 requests
 python-dotenv
 ta
-python-telegram-bot
 mplfinance
 matplotlib
-yfinance
+python-telegram-bot
+urllib3

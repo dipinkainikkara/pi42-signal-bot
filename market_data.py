@@ -1,106 +1,258 @@
-import yfinance as yf
+import logging
+import time
 import pandas as pd
 import requests
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# =========================
-# FETCH CANDLES
-# =========================
 
-def get_candles(symbol="BTCUSDT"):
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-    try:
+logger = logging.getLogger(__name__)
 
-        # =========================
-        # SYMBOL MAPPING
-        # =========================
 
-        mapping = {
+class Pi42MarketDataError(Exception):
+    pass
 
-            "BTCUSDT": "BTC-USD",
-            "ETHUSDT": "ETH-USD",
-            "SOLUSDT": "SOL-USD"
-        }
 
-        yf_symbol = mapping.get(
-            symbol,
-            "BTC-USD"
+class Pi42MarketData:
+
+    BASE_URL = "https://api.pi42.com/v1/market/klines"
+
+    VALID_PAIRS = [
+        "BTCINR",
+        "ETHINR",
+        "SOLINR"
+    ]
+
+    VALID_INTERVALS = [
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "4h",
+        "1d"
+    ]
+
+    def __init__(self):
+
+        self.timeout = 20
+        self.session = self._create_session()
+
+        logger.info(
+            "Pi42MarketData initialized"
         )
 
-        # =========================
-        # DOWNLOAD DATA
-        # =========================
+    def _create_session(self):
 
-        df = yf.download(
+        session = requests.Session()
 
-            yf_symbol,
-
-            interval="15m",
-
-            period="2d",
-
-            auto_adjust=False,
-
-            progress=False
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[
+                429,
+                500,
+                502,
+                503,
+                504
+            ],
+            allowed_methods=["POST"]
         )
 
-        # =========================
-        # EMPTY CHECK
-        # =========================
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy
+        )
 
-        if df.empty:
+        session.mount(
+            "https://",
+            adapter
+        )
 
-            print(
-                "Yahoo returned empty dataframe",
-                flush=True
+        return session
+
+    def get_klines(
+        self,
+        pair="BTCINR",
+        interval="15m",
+        limit=200
+    ):
+
+        logger.info(
+            f"Fetching klines {pair} {interval}"
+        )
+
+        if pair not in self.VALID_PAIRS:
+
+            raise Pi42MarketDataError(
+                f"Invalid pair: {pair}"
             )
 
-            return pd.DataFrame()
+        if interval not in self.VALID_INTERVALS:
 
-        # =========================
-        # FLATTEN COLUMNS
-        # =========================
+            raise Pi42MarketDataError(
+                f"Invalid interval: {interval}"
+            )
 
-        df.columns = [
+        payload = {
+            "pair": pair,
+            "interval": interval,
+            "limit": limit
+        }
 
-            col[0]
-            if isinstance(col, tuple)
-            else col
-            for col in df.columns
-        ]
+        logger.info(
+            f"Payload: {payload}"
+        )
 
-        # =========================
-        # RENAME COLUMNS
-        # =========================
+        try:
 
-        df = df.rename(columns={
+            time.sleep(0.2)
 
-            "Open": "open",
-            "High": "high",
-            "Low": "low",
-            "Close": "close",
-            "Volume": "volume"
-        })
+            response = self.session.post(
+                self.BASE_URL,
+                json=payload,
+                timeout=self.timeout
+            )
 
-        # =========================
-        # KEEP ONLY REQUIRED
-        # =========================
+            logger.info(
+                f"HTTP Status: {response.status_code}"
+            )
 
-        df = df[[
+            response.raise_for_status()
 
-            "open",
-            "high",
-            "low",
-            "close",
-            "volume"
-        ]]
+            data = response.json()
 
-        # =========================
-        # FORCE 1D SERIES
-        # =========================
+            logger.info(
+                f"Response received with {len(data)} candles"
+            )
+
+            if isinstance(data, list):
+
+                klines = data
+
+            elif isinstance(data, dict):
+
+                klines = data.get(
+                    "data",
+                    data.get("result", [])
+                )
+
+            else:
+
+                raise Pi42MarketDataError(
+                    f"Unexpected response: {type(data)}"
+                )
+
+            if not klines:
+
+                logger.warning(
+                    "No candle data returned"
+                )
+
+                return self._empty_dataframe()
+
+            df = self._parse_klines(
+                klines
+            )
+
+            logger.info(
+                f"Fetched {len(df)} candles"
+            )
+
+            return df
+
+        except requests.exceptions.RequestException as e:
+
+            raise Pi42MarketDataError(
+                f"Request failed: {e}"
+            )
+
+    def _parse_klines(
+        self,
+        klines
+    ):
+
+        records = []
+
+        for candle in klines:
+
+            try:
+
+                if isinstance(candle, dict):
+
+                    records.append({
+
+                        "timestamp":
+                        candle.get("startTime"),
+
+                        "open":
+                        candle.get("open"),
+
+                        "high":
+                        candle.get("high"),
+
+                        "low":
+                        candle.get("low"),
+
+                        "close":
+                        candle.get("close"),
+
+                        "volume":
+                        candle.get("volume")
+                    })
+
+                elif isinstance(
+                    candle,
+                    (list, tuple)
+                ):
+
+                    if len(candle) >= 6:
+
+                        records.append({
+
+                            "timestamp":
+                            candle[0],
+
+                            "open":
+                            candle[1],
+
+                            "high":
+                            candle[2],
+
+                            "low":
+                            candle[3],
+
+                            "close":
+                            candle[4],
+
+                            "volume":
+                            candle[5]
+                        })
+
+            except Exception as e:
+
+                logger.warning(
+                    f"Skipping candle: {e}"
+                )
+
+        if not records:
+
+            return self._empty_dataframe()
+
+        df = pd.DataFrame(records)
+
+        df["timestamp"] = pd.to_datetime(
+            df["timestamp"].astype(float),
+            unit="ms",
+            errors="coerce"
+        )
 
         for col in [
-
             "open",
             "high",
             "low",
@@ -108,59 +260,84 @@ def get_candles(symbol="BTCUSDT"):
             "volume"
         ]:
 
-            df[col] = pd.Series(
-                df[col]
-            ).astype(float)
-
-        # =========================
-        # CLEAN DATA
-        # =========================
+            df[col] = pd.to_numeric(
+                df[col],
+                errors="coerce"
+            )
 
         df.dropna(inplace=True)
 
-        print(
-            f"Final candles count: {len(df)}",
-            flush=True
+        df.sort_values(
+            "timestamp",
+            inplace=True
+        )
+
+        df.reset_index(
+            drop=True,
+            inplace=True
         )
 
         return df
 
-    except Exception as e:
+    def _empty_dataframe(self):
 
-        print(
-            f"MARKET DATA ERROR: {e}",
-            flush=True
+        return pd.DataFrame(
+            columns=[
+                "timestamp",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume"
+            ]
         )
 
-        return pd.DataFrame()
+    def close(self):
+
+        self.session.close()
+
+        logger.info(
+            "Session closed"
+        )
 
 
-# =========================
-# USD → INR RATE
-# =========================
+def get_candles(
+    pair="BTCINR",
+    interval="15m",
+    limit=200
+):
 
-def get_usdtinr_rate():
+    fetcher = Pi42MarketData()
 
     try:
 
-        url = "https://open.er-api.com/v6/latest/USD"
-
-        response = requests.get(
-            url,
-            timeout=10
+        return fetcher.get_klines(
+            pair=pair,
+            interval=interval,
+            limit=limit
         )
 
-        data = response.json()
+    finally:
 
-        return float(
-            data["rates"]["INR"]
+        fetcher.close()
+
+
+if __name__ == "__main__":
+
+    try:
+
+        df = get_candles(
+            pair="BTCINR",
+            interval="15m",
+            limit=20
         )
+
+        print("\n===================")
+        print("DATAFRAME")
+        print("===================\n")
+
+        print(df)
 
     except Exception as e:
 
-        print(
-            f"USDINR API Error: {e}",
-            flush=True
-        )
-
-        return 83.0
+        print("\nERROR:", e)

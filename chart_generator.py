@@ -3,21 +3,49 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+# =========================
+# GENERATE CHART
+# =========================
+
 def generate_chart(df, symbol):
 
     try:
 
         # =========================
-        # COPY DATA
+        # COPY DATAFRAME
         # =========================
 
         chart_df = df.copy()
 
         # =========================
-        # USE DATETIME INDEX
+        # VALIDATION
         # =========================
 
-        if not isinstance(
+        if chart_df.empty:
+
+            print(
+                "Chart dataframe empty",
+                flush=True
+            )
+
+            return None
+
+        # =========================
+        # ENSURE TIMESTAMP INDEX
+        # =========================
+
+        if "timestamp" in chart_df.columns:
+
+            chart_df["timestamp"] = pd.to_datetime(
+                chart_df["timestamp"]
+            )
+
+            chart_df.set_index(
+                "timestamp",
+                inplace=True
+            )
+
+        elif not isinstance(
             chart_df.index,
             pd.DatetimeIndex
         ):
@@ -32,11 +60,11 @@ def generate_chart(df, symbol):
 
         chart_df = chart_df[[
 
-            'open',
-            'high',
-            'low',
-            'close',
-            'volume'
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
         ]]
 
         # =========================
@@ -46,20 +74,42 @@ def generate_chart(df, symbol):
         chart_df = chart_df.tail(120)
 
         # =========================
+        # EMA CALCULATIONS
+        # =========================
+
+        chart_df["ema20"] = (
+
+            chart_df["close"]
+
+            .ewm(span=20)
+
+            .mean()
+        )
+
+        chart_df["ema50"] = (
+
+            chart_df["close"]
+
+            .ewm(span=50)
+
+            .mean()
+        )
+
+        # =========================
         # MARKET COLORS
         # =========================
 
         mc = mpf.make_marketcolors(
 
-            up='#00ff88',
+            up="#00ff88",
 
-            down='#ff3355',
+            down="#ff3355",
 
-            edge='inherit',
+            edge="inherit",
 
-            wick='inherit',
+            wick="inherit",
 
-            volume='inherit'
+            volume="inherit"
         )
 
         # =========================
@@ -70,60 +120,63 @@ def generate_chart(df, symbol):
 
             marketcolors=mc,
 
-            facecolor='#0f172a',
+            facecolor="#0f172a",
 
-            figcolor='#0f172a',
+            figcolor="#0f172a",
 
-            edgecolor='#0f172a',
+            edgecolor="#0f172a",
 
-            gridcolor='#334155',
+            gridcolor="#334155",
 
-            gridstyle='--',
+            gridstyle="--",
 
             y_on_right=True,
 
             rc={
 
-                'axes.labelcolor': 'white',
+                "axes.labelcolor":
+                "white",
 
-                'xtick.color': 'white',
+                "xtick.color":
+                "white",
 
-                'ytick.color': 'white',
+                "ytick.color":
+                "white",
 
-                'text.color': 'white',
+                "text.color":
+                "white",
 
-                'axes.titlecolor': 'white'
+                "axes.titlecolor":
+                "white",
+
+                "figure.facecolor":
+                "#0f172a",
+
+                "savefig.facecolor":
+                "#0f172a"
             }
         )
 
         # =========================
-        # EMA LINES
+        # EMA OVERLAYS
         # =========================
-
-        ema50 = chart_df['close'].ewm(
-            span=50
-        ).mean()
-
-        ema200 = chart_df['close'].ewm(
-            span=200
-        ).mean()
 
         addplots = [
 
             mpf.make_addplot(
 
-                ema50,
+                chart_df["ema20"],
 
-                color='#00bfff',
+                color="#00bfff",
 
                 width=1.2
             ),
 
             mpf.make_addplot(
 
-                ema200,
+                chart_df["ema50"],
 
-                color='#ff9900',
+                color="#ff9900",
 
                 width=1.5
             )
@@ -137,7 +190,7 @@ def generate_chart(df, symbol):
 
             chart_df,
 
-            type='candle',
+            type="candle",
 
             style=style,
 
@@ -145,7 +198,7 @@ def generate_chart(df, symbol):
 
             addplot=addplots,
 
-            figsize=(12, 8),
+            figsize=(14, 8),
 
             tight_layout=True,
 
@@ -158,31 +211,38 @@ def generate_chart(df, symbol):
 
         fig.suptitle(
 
-            f"{symbol} Smart Signal Analysis",
+            f"{symbol} Pi42 Futures Analysis",
 
-            color='white',
+            color="white",
 
             fontsize=16
         )
 
         # =========================
-        # SAVE
+        # SAVE FILE
         # =========================
+
+        chart_path = "chart.png"
 
         plt.savefig(
 
-            "chart.png",
+            chart_path,
 
             dpi=150,
 
-            bbox_inches='tight',
+            bbox_inches="tight",
 
-            facecolor='#0f172a'
+            facecolor="#0f172a"
         )
 
         plt.close()
 
-        return "chart.png"
+        print(
+            f"Chart saved: {chart_path}",
+            flush=True
+        )
+
+        return chart_path
 
     except Exception as e:
 

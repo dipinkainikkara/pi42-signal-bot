@@ -1,32 +1,78 @@
-from market_data import (
-    get_candles,
-    get_usdtinr_rate
-)
-
+from market_data import get_candles
 from strategy import analyze
 from telegram_alerts import send_alert
 from chart_generator import generate_chart
 
 import signal_state
-import time
+import logging
 import traceback
+import time
 
+
+# =========================
+# STARTUP PRINT
+# =========================
 
 print("BOT STARTED", flush=True)
 
 
 # =========================
-# SYMBOL MAPPING
+# LOGGING
 # =========================
 
-SYMBOLS = [
+logging.basicConfig(
 
-    ("BTCUSDT", "BTCINR"),
+    level=logging.INFO,
 
-    ("ETHUSDT", "ETHINR"),
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-    ("SOLUSDT", "SOLINR")
+logger = logging.getLogger(__name__)
+
+
+# =========================
+# SETTINGS
+# =========================
+
+TIMEFRAME = "15m"
+
+CHECK_INTERVAL = 900
+
+LEVERAGE = "5x"
+
+MIN_CONFIDENCE = 6.5
+
+# =========================
+# PAIRS
+# =========================
+
+PAIRS = [
+
+    "BTCINR",
+
+    "ETHINR",
+
+    "SOLINR"
 ]
+
+
+# =========================
+# SIGNAL STORAGE
+# =========================
+
+if not hasattr(
+    signal_state,
+    "last_signals"
+):
+
+    signal_state.last_signals = {}
+
+if not hasattr(
+    signal_state,
+    "signal_cooldowns"
+):
+
+    signal_state.signal_cooldowns = {}
 
 
 # =========================
@@ -35,29 +81,29 @@ SYMBOLS = [
 
 while True:
 
+    print(
+        "\n=========================",
+        flush=True
+    )
+
+    print(
+        "MAIN LOOP RUNNING",
+        flush=True
+    )
+
+    print(
+        "=========================\n",
+        flush=True
+    )
+
     try:
 
-        print(
-            "\n=========================",
-            flush=True
-        )
-
-        print(
-            "MAIN LOOP RUNNING",
-            flush=True
-        )
-
-        print(
-            "=========================\n",
-            flush=True
-        )
-
-        for market_symbol, display_symbol in SYMBOLS:
+        for pair in PAIRS:
 
             try:
 
                 print(
-                    f"\nChecking {display_symbol}...",
+                    f"Checking {pair}",
                     flush=True
                 )
 
@@ -65,23 +111,23 @@ while True:
                 # FETCH MARKET DATA
                 # =========================
 
-                print(
-                    f"Fetching candles for {market_symbol}",
-                    flush=True
-                )
-
                 df = get_candles(
-                    symbol=market_symbol
+
+                    pair=pair,
+
+                    interval=TIMEFRAME,
+
+                    limit=200
                 )
 
                 # =========================
-                # EMPTY DATA PROTECTION
+                # EMPTY CHECK
                 # =========================
 
                 if df.empty:
 
                     print(
-                        f"No candle data for {display_symbol}",
+                        f"No candle data for {pair}",
                         flush=True
                     )
 
@@ -93,26 +139,8 @@ while True:
                 )
 
                 # =========================
-                # NOT ENOUGH DATA
+                # STRATEGY ANALYSIS
                 # =========================
-
-                if len(df) < 50:
-
-                    print(
-                        f"Not enough candles for {display_symbol}",
-                        flush=True
-                    )
-
-                    continue
-
-                # =========================
-                # ANALYZE STRATEGY
-                # =========================
-
-                print(
-                    "Running strategy analysis...",
-                    flush=True
-                )
 
                 result = analyze(df)
 
@@ -122,45 +150,60 @@ while True:
                 )
 
                 # =========================
-                # INVALID RESULT
+                # NO SIGNAL
                 # =========================
 
                 if not result:
 
-                    print(
-                        f"No analysis result for {display_symbol}",
-                        flush=True
-                    )
-
                     continue
-
-                # =========================
-                # NO SIGNAL
-                # =========================
 
                 if not result.get("signal"):
 
                     print(
-                        f"No signal for {display_symbol}",
+                        f"No signal for {pair}",
                         flush=True
                     )
 
                     continue
 
                 # =========================
-                # DUPLICATE PROTECTION
+                # CONFIDENCE FILTER
+                # =========================
+
+                if (
+
+                    result["confidence"]
+
+                    < MIN_CONFIDENCE
+                ):
+
+                    print(
+                        f"Low confidence skipped",
+                        flush=True
+                    )
+
+                    continue
+
+                # =========================
+                # DUPLICATE FILTER
                 # =========================
 
                 previous_signal = (
+
                     signal_state.last_signals.get(
-                        display_symbol
+                        pair
                     )
                 )
 
-                if previous_signal == result["signal"]:
+                if (
+
+                    previous_signal
+
+                    == result["signal"]
+                ):
 
                     print(
-                        f"Duplicate signal skipped for {display_symbol}",
+                        f"Duplicate signal skipped for {pair}",
                         flush=True
                     )
 
@@ -171,63 +214,28 @@ while True:
                 # =========================
 
                 signal_state.last_signals[
-                    display_symbol
+                    pair
                 ] = result["signal"]
-
-                # =========================
-                # INR CONVERSION
-                # =========================
-
-                print(
-                    "Fetching USDINR rate...",
-                    flush=True
-                )
-
-                usdtinr = get_usdtinr_rate()
-
-                print(
-                    f"USDINR Rate: {usdtinr}",
-                    flush=True
-                )
-
-                result["price"] = round(
-                    result["price"] * usdtinr,
-                    2
-                )
-
-                result["stoploss"] = round(
-                    result["stoploss"] * usdtinr,
-                    2
-                )
-
-                result["tp1"] = round(
-                    result["tp1"] * usdtinr,
-                    2
-                )
-
-                result["tp2"] = round(
-                    result["tp2"] * usdtinr,
-                    2
-                )
-
-                result["tp3"] = round(
-                    result["tp3"] * usdtinr,
-                    2
-                )
 
                 # =========================
                 # EMOJIS
                 # =========================
 
                 direction_emoji = (
+
                     "🟢"
+
                     if result["signal"] == "LONG"
+
                     else "🔴"
                 )
 
                 market_emoji = (
+
                     "📈"
+
                     if result["market_state"] == "BULLISH"
+
                     else "📉"
                 )
 
@@ -236,12 +244,12 @@ while True:
                 # =========================
 
                 message = f"""
-{direction_emoji} HIGH CONFIDENCE {result['signal']}
+{direction_emoji} PI42 {result['signal']} SIGNAL
 
 ━━━━━━━━━━━━━━
-📈 Pair: {display_symbol}
-⏰ Timeframe: 15M
-⚡ Suggested Leverage: 5x
+📈 Pair: {pair}
+⏰ Timeframe: {TIMEFRAME.upper()}
+⚡ Suggested Leverage: {LEVERAGE}
 ━━━━━━━━━━━━━━
 
 💰 Entry
@@ -264,7 +272,14 @@ TP3 → ₹{result['tp3']}
 {result['rsi']}
 
 📦 Volume
-{result['volume']}
+{round(result['volume'], 2)}
+
+━━━━━━━━━━━━━━
+📉 EMA20
+{result['ema20']}
+
+📈 EMA50
+{result['ema50']}
 
 ━━━━━━━━━━━━━━
 🔥 Confidence
@@ -278,13 +293,15 @@ TP3 → ₹{result['tp3']}
                 # =========================
 
                 print(
-                    "Generating chart...",
+                    f"Generating chart for {pair}",
                     flush=True
                 )
 
                 chart_path = generate_chart(
+
                     df,
-                    display_symbol
+
+                    pair
                 )
 
                 print(
@@ -293,28 +310,30 @@ TP3 → ₹{result['tp3']}
                 )
 
                 # =========================
-                # SEND TELEGRAM ALERT
+                # SEND ALERT
                 # =========================
 
                 print(
-                    "Sending Telegram alert...",
+                    f"Sending Telegram alert for {pair}",
                     flush=True
                 )
 
                 send_alert(
+
                     message,
+
                     image_path=chart_path
                 )
 
                 print(
-                    f"Signal sent successfully for {display_symbol}",
+                    f"Signal sent successfully for {pair}",
                     flush=True
                 )
 
             except Exception as pair_error:
 
                 print(
-                    f"\nPAIR ERROR ({display_symbol}):",
+                    f"\nPAIR ERROR ({pair})",
                     flush=True
                 )
 
@@ -330,7 +349,7 @@ TP3 → ₹{result['tp3']}
     except Exception as main_error:
 
         print(
-            "\nMAIN LOOP ERROR:",
+            "\nMAIN LOOP ERROR",
             flush=True
         )
 
@@ -341,13 +360,9 @@ TP3 → ₹{result['tp3']}
 
         traceback.print_exc()
 
-    # =========================
-    # WAIT 5 MINUTES
-    # =========================
-
     print(
-        "\nSleeping for 5 minutes...\n",
+        f"\nSleeping for {CHECK_INTERVAL} seconds...\n",
         flush=True
     )
 
-    time.sleep(900)
+    time.sleep(CHECK_INTERVAL)
