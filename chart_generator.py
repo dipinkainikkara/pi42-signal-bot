@@ -1,165 +1,194 @@
 import mplfinance as mpf
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def generate_chart(df, symbol):
 
-    # =========================
-    # PREPARE DATA
-    # =========================
+    try:
 
-    chart_df = df.copy()
+        # =========================
+        # COPY DATA
+        # =========================
 
-    chart_df['Date'] = pd.to_datetime(
-        chart_df['open_time'],
-        unit='ms'
-    )
+        chart_df = df.copy()
 
-    chart_df.set_index('Date', inplace=True)
+        # =========================
+        # USE DATETIME INDEX
+        # =========================
 
-    chart_df = chart_df[[
-        'open',
-        'high',
-        'low',
-        'close',
-        'volume'
-    ]]
+        if not isinstance(
+            chart_df.index,
+            pd.DatetimeIndex
+        ):
 
-    # =========================
-    # LIMIT DATA
-    # =========================
+            chart_df.index = pd.to_datetime(
+                chart_df.index
+            )
 
-    chart_df = chart_df.tail(120)
+        # =========================
+        # KEEP REQUIRED COLUMNS
+        # =========================
 
-    # =========================
-    # DARK MARKET COLORS
-    # =========================
+        chart_df = chart_df[[
 
-    mc = mpf.make_marketcolors(
+            'open',
+            'high',
+            'low',
+            'close',
+            'volume'
+        ]]
 
-        up='#00ff88',
-        down='#ff3355',
+        # =========================
+        # LAST 120 CANDLES
+        # =========================
 
-        edge='inherit',
+        chart_df = chart_df.tail(120)
 
-        wick='inherit',
+        # =========================
+        # MARKET COLORS
+        # =========================
 
-        volume='inherit'
-    )
+        mc = mpf.make_marketcolors(
 
-    # =========================
-    # DARK STYLE
-    # =========================
+            up='#00ff88',
 
-    s = mpf.make_mpf_style(
+            down='#ff3355',
 
-        marketcolors=mc,
+            edge='inherit',
 
-        facecolor='#0f172a',
+            wick='inherit',
 
-        edgecolor='#0f172a',
-
-        figcolor='#0f172a',
-
-        gridcolor='#334155',
-
-        gridstyle='--',
-
-        y_on_right=True,
-
-        rc={
-
-            'axes.labelcolor': 'white',
-
-            'xtick.color': 'white',
-
-            'ytick.color': 'white',
-
-            'text.color': 'white',
-
-            'axes.titlecolor': 'white'
-        }
-    )
-
-    # =========================
-    # EMA LINES
-    # =========================
-
-    ema50 = chart_df['close'].ewm(
-        span=50
-    ).mean()
-
-    ema200 = chart_df['close'].ewm(
-        span=200
-    ).mean()
-
-    addplots = [
-
-        mpf.make_addplot(
-            ema50,
-            color='#00bfff',
-            width=1.2
-        ),
-
-        mpf.make_addplot(
-            ema200,
-            color='#ff9900',
-            width=1.5
+            volume='inherit'
         )
-    ]
 
-    # =========================
-    # CREATE FIGURE
-    # =========================
+        # =========================
+        # STYLE
+        # =========================
 
-    fig, axes = mpf.plot(
+        style = mpf.make_mpf_style(
 
-        chart_df,
+            marketcolors=mc,
 
-        type='candle',
+            facecolor='#0f172a',
 
-        style=s,
+            figcolor='#0f172a',
 
-        volume=True,
+            edgecolor='#0f172a',
 
-        addplot=addplots,
+            gridcolor='#334155',
 
-        figsize=(12, 8),
+            gridstyle='--',
 
-        tight_layout=True,
+            y_on_right=True,
 
-        returnfig=True
-    )
+            rc={
 
-    # =========================
-    # TITLE
-    # =========================
+                'axes.labelcolor': 'white',
 
-    fig.suptitle(
+                'xtick.color': 'white',
 
-        f"{symbol} Smart Signal Analysis",
+                'ytick.color': 'white',
 
-        color='white',
+                'text.color': 'white',
 
-        fontsize=16
-    )
+                'axes.titlecolor': 'white'
+            }
+        )
 
-    # =========================
-    # SAVE
-    # =========================
+        # =========================
+        # EMA LINES
+        # =========================
 
-    plt.savefig(
+        ema50 = chart_df['close'].ewm(
+            span=50
+        ).mean()
 
-        'chart.png',
+        ema200 = chart_df['close'].ewm(
+            span=200
+        ).mean()
 
-        dpi=150,
+        addplots = [
 
-        bbox_inches='tight',
+            mpf.make_addplot(
 
-        facecolor='#0f172a'
-    )
+                ema50,
 
-    plt.close()
+                color='#00bfff',
 
-    return "chart.png"
+                width=1.2
+            ),
+
+            mpf.make_addplot(
+
+                ema200,
+
+                color='#ff9900',
+
+                width=1.5
+            )
+        ]
+
+        # =========================
+        # CREATE CHART
+        # =========================
+
+        fig, axes = mpf.plot(
+
+            chart_df,
+
+            type='candle',
+
+            style=style,
+
+            volume=True,
+
+            addplot=addplots,
+
+            figsize=(12, 8),
+
+            tight_layout=True,
+
+            returnfig=True
+        )
+
+        # =========================
+        # TITLE
+        # =========================
+
+        fig.suptitle(
+
+            f"{symbol} Smart Signal Analysis",
+
+            color='white',
+
+            fontsize=16
+        )
+
+        # =========================
+        # SAVE
+        # =========================
+
+        plt.savefig(
+
+            "chart.png",
+
+            dpi=150,
+
+            bbox_inches='tight',
+
+            facecolor='#0f172a'
+        )
+
+        plt.close()
+
+        return "chart.png"
+
+    except Exception as e:
+
+        print(
+            f"CHART ERROR: {e}",
+            flush=True
+        )
+
+        return None
