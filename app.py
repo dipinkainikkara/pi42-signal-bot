@@ -9,6 +9,10 @@ from chart_generator import generate_chart
 
 import signal_state
 import time
+import traceback
+
+
+print("BOT STARTED", flush=True)
 
 
 # =========================
@@ -33,113 +37,163 @@ while True:
 
     try:
 
+        print(
+            "\n=========================",
+            flush=True
+        )
+
+        print(
+            "MAIN LOOP RUNNING",
+            flush=True
+        )
+
+        print(
+            "=========================\n",
+            flush=True
+        )
+
         for market_symbol, display_symbol in SYMBOLS:
 
-            print(f"\nChecking {display_symbol}...")
-
-            # =========================
-            # FETCH MARKET DATA
-            # =========================
-
-            df = get_candles(
-                symbol=market_symbol
-            )
-
-            # =========================
-            # ANALYZE STRATEGY
-            # =========================
-
-            result = analyze(df)
-
-            print(result)
-
-            # =========================
-            # NO SIGNAL
-            # =========================
-
-            if not result["signal"]:
+            try:
 
                 print(
-                    f"No signal for {display_symbol}"
+                    f"\nChecking {display_symbol}...",
+                    flush=True
                 )
 
-                continue
+                # =========================
+                # FETCH MARKET DATA
+                # =========================
 
-            # =========================
-            # DUPLICATE PROTECTION
-            # =========================
+                print(
+                    f"Fetching candles for {market_symbol}",
+                    flush=True
+                )
 
-            previous_signal = (
-                signal_state.last_signals.get(
+                df = get_candles(
+                    symbol=market_symbol
+                )
+
+                print(
+                    f"Fetched {len(df)} candles",
+                    flush=True
+                )
+
+                # =========================
+                # ANALYZE STRATEGY
+                # =========================
+
+                print(
+                    "Running strategy analysis...",
+                    flush=True
+                )
+
+                result = analyze(df)
+
+                print(
+                    f"Analysis result: {result}",
+                    flush=True
+                )
+
+                # =========================
+                # NO SIGNAL
+                # =========================
+
+                if not result["signal"]:
+
+                    print(
+                        f"No signal for {display_symbol}",
+                        flush=True
+                    )
+
+                    continue
+
+                # =========================
+                # DUPLICATE PROTECTION
+                # =========================
+
+                previous_signal = (
+                    signal_state.last_signals.get(
+                        display_symbol
+                    )
+                )
+
+                if previous_signal == result["signal"]:
+
+                    print(
+                        f"Duplicate signal skipped for {display_symbol}",
+                        flush=True
+                    )
+
+                    continue
+
+                # Save latest signal
+                signal_state.last_signals[
                     display_symbol
-                )
-            )
+                ] = result["signal"]
 
-            if previous_signal == result["signal"]:
+                # =========================
+                # USD → INR CONVERSION
+                # =========================
 
                 print(
-                    f"Duplicate signal skipped for {display_symbol}"
+                    "Fetching USDINR rate...",
+                    flush=True
                 )
 
-                continue
+                usdtinr = get_usdtinr_rate()
 
-            # Save latest signal
-            signal_state.last_signals[
-                display_symbol
-            ] = result["signal"]
+                print(
+                    f"USDINR Rate: {usdtinr}",
+                    flush=True
+                )
 
-            # =========================
-            # USD → INR CONVERSION
-            # =========================
+                result["price"] = round(
+                    result["price"] * usdtinr,
+                    2
+                )
 
-            usdtinr = get_usdtinr_rate()
+                result["stoploss"] = round(
+                    result["stoploss"] * usdtinr,
+                    2
+                )
 
-            result["price"] = round(
-                result["price"] * usdtinr,
-                2
-            )
+                result["tp1"] = round(
+                    result["tp1"] * usdtinr,
+                    2
+                )
 
-            result["stoploss"] = round(
-                result["stoploss"] * usdtinr,
-                2
-            )
+                result["tp2"] = round(
+                    result["tp2"] * usdtinr,
+                    2
+                )
 
-            result["tp1"] = round(
-                result["tp1"] * usdtinr,
-                2
-            )
+                result["tp3"] = round(
+                    result["tp3"] * usdtinr,
+                    2
+                )
 
-            result["tp2"] = round(
-                result["tp2"] * usdtinr,
-                2
-            )
+                # =========================
+                # EMOJIS
+                # =========================
 
-            result["tp3"] = round(
-                result["tp3"] * usdtinr,
-                2
-            )
+                direction_emoji = (
+                    "🟢"
+                    if result["signal"] == "LONG"
+                    else "🔴"
+                )
 
-            # =========================
-            # EMOJIS
-            # =========================
+                market_emoji = (
+                    "📈"
+                    if result["market_state"] == "BULLISH"
+                    else "📉"
+                )
 
-            direction_emoji = (
-                "🟢"
-                if result["signal"] == "LONG"
-                else "🔴"
-            )
+                # =========================
+                # TELEGRAM MESSAGE
+                # =========================
 
-            market_emoji = (
-                "📈"
-                if result["market_state"] == "BULLISH"
-                else "📉"
-            )
-
-            # =========================
-            # TELEGRAM MESSAGE
-            # =========================
-
-            message = f"""
+                message = f"""
 {direction_emoji} HIGH CONFIDENCE {result['signal']}
 
 ━━━━━━━━━━━━━━
@@ -177,34 +231,81 @@ TP3 → ₹{result['tp3']}
 ⚠️ Risk Managed Setup
 """
 
-            # =========================
-            # GENERATE CHART
-            # =========================
+                # =========================
+                # GENERATE CHART
+                # =========================
 
-            chart_path = generate_chart(
-                df,
-                display_symbol
-            )
+                print(
+                    "Generating chart...",
+                    flush=True
+                )
 
-            # =========================
-            # SEND TELEGRAM ALERT
-            # =========================
+                chart_path = generate_chart(
+                    df,
+                    display_symbol
+                )
 
-            send_alert(
-                message,
-                image_path=chart_path
-            )
+                print(
+                    f"Chart generated: {chart_path}",
+                    flush=True
+                )
 
-            print(
-                f"Signal sent for {display_symbol}"
-            )
+                # =========================
+                # SEND TELEGRAM ALERT
+                # =========================
 
-    except Exception as e:
+                print(
+                    "Sending Telegram alert...",
+                    flush=True
+                )
 
-        print("ERROR:", e)
+                send_alert(
+                    message,
+                    image_path=chart_path
+                )
+
+                print(
+                    f"Signal sent successfully for {display_symbol}",
+                    flush=True
+                )
+
+            except Exception as pair_error:
+
+                print(
+                    f"\nPAIR ERROR ({display_symbol}):",
+                    flush=True
+                )
+
+                print(
+                    str(pair_error),
+                    flush=True
+                )
+
+                traceback.print_exc()
+
+                continue
+
+    except Exception as main_error:
+
+        print(
+            "\nMAIN LOOP ERROR:",
+            flush=True
+        )
+
+        print(
+            str(main_error),
+            flush=True
+        )
+
+        traceback.print_exc()
 
     # =========================
-    # WAIT 15 MINUTES
+    # WAIT 5 MINUTES
     # =========================
+
+    print(
+        "\nSleeping for 5 minutes...\n",
+        flush=True
+    )
 
     time.sleep(300)
