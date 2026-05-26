@@ -8,3 +8,4 @@ ta
 python-telegram-bot
 mplfinance
 matplotlib
+yfinance

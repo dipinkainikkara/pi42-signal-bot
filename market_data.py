@@ -1,176 +1,113 @@
-import requests
+import yfinance as yf
 import pandas as pd
+import requests
 
 
 # =========================
 # FETCH CANDLES
 # =========================
 
-def get_candles(
-
-    symbol="BTCUSDT",
-    interval="15m",
-    limit=200
-
-):
+def get_candles(symbol="BTC-USD"):
 
     try:
 
-        url = "https://api.binance.com/api/v3/klines"
+        # =========================
+        # SYMBOL CONVERSION
+        # =========================
 
-        headers = {
+        mapping = {
 
-            "User-Agent":
-            "Mozilla/5.0"
+            "BTCUSDT": "BTC-USD",
+            "ETHUSDT": "ETH-USD",
+            "SOLUSDT": "SOL-USD"
         }
 
-        params = {
-
-            "symbol": symbol,
-            "interval": interval,
-            "limit": limit
-        }
-
-        response = requests.get(
-
-            url,
-
-            params=params,
-
-            headers=headers,
-
-            timeout=15
-        )
-
-        print(
-            f"Binance Status Code: {response.status_code}",
-            flush=True
+        yf_symbol = mapping.get(
+            symbol,
+            "BTC-USD"
         )
 
         # =========================
-        # INVALID RESPONSE
+        # DOWNLOAD DATA
         # =========================
 
-        if response.status_code != 200:
+        df = yf.download(
+
+            yf_symbol,
+
+            interval="15m",
+
+            period="2d",
+
+            progress=False
+        )
+
+        # =========================
+        # EMPTY CHECK
+        # =========================
+
+        if df.empty:
 
             print(
-                f"Binance Error: {response.text}",
-                flush=True
-            )
-
-            return pd.DataFrame()
-
-        data = response.json()
-
-        # =========================
-        # EMPTY DATA
-        # =========================
-
-        if not data:
-
-            print(
-                "No candle data returned",
-                flush=True
+                "Yahoo returned empty dataframe"
             )
 
             return pd.DataFrame()
 
         # =========================
-        # CREATE DATAFRAME
+        # CLEAN DATAFRAME
         # =========================
 
-        df = pd.DataFrame(
+        df = df.rename(columns={
 
-            data,
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume"
+        })
 
-            columns=[
-
-                "open_time",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "close_time",
-                "quote_asset_volume",
-                "number_of_trades",
-                "taker_buy_base",
-                "taker_buy_quote",
-                "ignore"
-            ]
-        )
-
-        # =========================
-        # CONVERT NUMBERS
-        # =========================
-
-        numeric_columns = [
+        df = df[[
 
             "open",
             "high",
             "low",
             "close",
             "volume"
-        ]
-
-        for col in numeric_columns:
-
-            df[col] = pd.to_numeric(
-                df[col],
-                errors="coerce"
-            )
-
-        # =========================
-        # DROP BAD ROWS
-        # =========================
+        ]]
 
         df.dropna(inplace=True)
-
-        print(
-            f"Final candles count: {len(df)}",
-            flush=True
-        )
 
         return df
 
     except Exception as e:
 
         print(
-            f"Market data error: {e}",
-            flush=True
+            "MARKET DATA ERROR:",
+            e
         )
 
         return pd.DataFrame()
 
 
 # =========================
-# USD → INR
+# USDINR RATE
 # =========================
 
 def get_usdtinr_rate():
 
     try:
 
-        url = "https://api.exchangerate-api.com/v4/latest/USD"
+        url = "https://open.er-api.com/v6/latest/USD"
 
-        response = requests.get(
-
-            url,
-
-            timeout=10
-        )
+        response = requests.get(url)
 
         data = response.json()
 
-        rate = data["rates"]["INR"]
-
-        return float(rate)
-
-    except Exception as e:
-
-        print(
-            f"USDINR API Error: {e}",
-            flush=True
+        return float(
+            data["rates"]["INR"]
         )
+
+    except:
 
         return 83.0
