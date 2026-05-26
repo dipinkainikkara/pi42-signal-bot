@@ -9,14 +9,14 @@ def analyze(df):
     # INDICATORS
     # =========================
 
+    df['ema20'] = EMAIndicator(
+        close=df['close'],
+        window=20
+    ).ema_indicator()
+
     df['ema50'] = EMAIndicator(
         close=df['close'],
         window=50
-    ).ema_indicator()
-
-    df['ema200'] = EMAIndicator(
-        close=df['close'],
-        window=200
     ).ema_indicator()
 
     df['rsi'] = RSIIndicator(
@@ -74,11 +74,11 @@ def analyze(df):
 
     market_state = "SIDEWAYS"
 
-    if latest['ema50'] > latest['ema200']:
+    if latest['ema20'] > latest['ema50']:
 
         market_state = "BULLISH"
 
-    elif latest['ema50'] < latest['ema200']:
+    elif latest['ema20'] < latest['ema50']:
 
         market_state = "BEARISH"
 
