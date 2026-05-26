@@ -2,8 +2,6 @@ from ta.trend import EMAIndicator
 from ta.momentum import RSIIndicator
 from ta.volatility import AverageTrueRange
 
-import random
-
 
 def analyze(df):
 
@@ -33,102 +31,172 @@ def analyze(df):
         window=14
     ).average_true_range()
 
-    latest = df.iloc[-1]
+    df['volume_ma'] = df['volume'].rolling(
+        20
+    ).mean()
 
     # =========================
-    # BASIC VALUES
+    # CLEAN DATA
     # =========================
+
+    df.dropna(inplace=True)
+
+    if len(df) < 50:
+
+        return {
+            "signal": None
+        }
+
+    latest = df.iloc[-1]
 
     current_price = float(
         latest['close']
     )
 
-    atr = float(
-        latest['atr']
-    )
-
-    rsi = float(
+    current_rsi = float(
         latest['rsi']
     )
 
-    volume = float(
+    current_volume = float(
         latest['volume']
     )
 
-    # =========================
-    # RANDOM TEST SIGNAL
-    # =========================
+    current_atr = float(
+        latest['atr']
+    )
 
-    signal = random.choice([
-        "LONG",
-        "SHORT"
-    ])
+    signal = None
+    confidence = 0
 
     # =========================
     # MARKET STATE
     # =========================
 
-    market_state = (
-        "BULLISH"
-        if signal == "LONG"
-        else "BEARISH"
+    market_state = "SIDEWAYS"
+
+    if latest['ema50'] > latest['ema200']:
+
+        market_state = "BULLISH"
+
+    elif latest['ema50'] < latest['ema200']:
+
+        market_state = "BEARISH"
+
+    # =========================
+    # VOLUME CONFIRMATION
+    # =========================
+
+    strong_volume = (
+
+        current_volume >
+
+        (latest['volume_ma'] * 0.8)
     )
 
     # =========================
-    # RANDOM CONFIDENCE
+    # LONG CONDITIONS
     # =========================
 
-    confidence = round(
-        random.uniform(7.0, 9.5),
-        1
-    )
+    if (
 
-    # =========================
-    # LONG TEST
-    # =========================
+        market_state == "BULLISH"
 
-    if signal == "LONG":
+        and current_rsi > 52
 
+        and strong_volume
+    ):
+
+        signal = "LONG"
+
+        confidence = 7.0
+
+        # RSI bonus
+        if current_rsi > 60:
+
+            confidence += 0.5
+
+        # Strong volume bonus
+        if current_volume > (
+
+            latest['volume_ma'] * 1.3
+        ):
+
+            confidence += 0.5
+
+        # Stoploss
         stoploss = current_price - (
-            atr * 1.5
+            current_atr * 1.5
         )
 
+        # Targets
         tp1 = current_price + (
-            atr * 1.5
+            current_atr * 1.5
         )
 
         tp2 = current_price + (
-            atr * 3
+            current_atr * 3
         )
 
         tp3 = current_price + (
-            atr * 5
+            current_atr * 5
         )
 
     # =========================
-    # SHORT TEST
+    # SHORT CONDITIONS
     # =========================
 
-    else:
+    elif (
 
+        market_state == "BEARISH"
+
+        and current_rsi < 48
+
+        and strong_volume
+    ):
+
+        signal = "SHORT"
+
+        confidence = 7.0
+
+        # RSI bonus
+        if current_rsi < 40:
+
+            confidence += 0.5
+
+        # Strong volume bonus
+        if current_volume > (
+
+            latest['volume_ma'] * 1.3
+        ):
+
+            confidence += 0.5
+
+        # Stoploss
         stoploss = current_price + (
-            atr * 1.5
+            current_atr * 1.5
         )
 
+        # Targets
         tp1 = current_price - (
-            atr * 1.5
+            current_atr * 1.5
         )
 
         tp2 = current_price - (
-            atr * 3
+            current_atr * 3
         )
 
         tp3 = current_price - (
-            atr * 5
+            current_atr * 5
         )
 
+    else:
+
+        return {
+            "signal": None
+        }
+
     # =========================
-    # RETURN TEST SIGNAL
+    # RETURN SIGNAL
     # =========================
 
     return {
@@ -141,16 +209,19 @@ def analyze(df):
         ),
 
         "rsi": round(
-            rsi,
+            current_rsi,
             2
         ),
 
-        "confidence": confidence,
+        "confidence": round(
+            confidence,
+            1
+        ),
 
         "market_state": market_state,
 
         "volume": round(
-            volume,
+            current_volume,
             2
         ),
 

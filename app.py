@@ -350,4 +350,4 @@ TP3 → ₹{result['tp3']}
         flush=True
     )
 
-    time.sleep(300)
+    time.sleep(900)
