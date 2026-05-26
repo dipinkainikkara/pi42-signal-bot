@@ -8,14 +8,35 @@ import signal_state
 import logging
 import traceback
 import time
+import threading
+import os
 
+from dotenv import load_dotenv
+
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
+
+# =========================
+# LOAD ENV
+# =========================
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv(
+    "TELEGRAM_BOT_TOKEN"
+)
 
 # =========================
 # STARTUP
 # =========================
 
 print("BOT STARTED", flush=True)
-
 
 # =========================
 # LOGGING
@@ -30,7 +51,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 # =========================
 # SETTINGS
 # =========================
@@ -42,7 +62,6 @@ CHECK_INTERVAL = 900
 LEVERAGE = "5x"
 
 MIN_CONFIDENCE = 6.5
-
 
 # =========================
 # PAIRS
@@ -57,7 +76,6 @@ PAIRS = [
     "SOLINR"
 ]
 
-
 # =========================
 # SIGNAL STORAGE
 # =========================
@@ -71,228 +89,198 @@ if not hasattr(
 
 if not hasattr(
     signal_state,
-    "signal_cooldowns"
+    "latest_signal_data"
 ):
 
-    signal_state.signal_cooldowns = {}
-
+    signal_state.latest_signal_data = {}
 
 # =========================
-# MAIN LOOP
+# SIGNAL LOOP
 # =========================
 
-while True:
+def signal_loop():
 
-    print(
-        "\n=========================",
-        flush=True
-    )
+    while True:
 
-    print(
-        "MAIN LOOP RUNNING",
-        flush=True
-    )
+        print(
+            "\n=========================",
+            flush=True
+        )
 
-    print(
-        "=========================\n",
-        flush=True
-    )
+        print(
+            "MAIN LOOP RUNNING",
+            flush=True
+        )
 
-    try:
+        print(
+            "=========================\n",
+            flush=True
+        )
 
-        for pair in PAIRS:
+        try:
 
-            try:
-
-                print(
-                    f"Checking {pair}",
-                    flush=True
-                )
-
-                # =========================
-                # FETCH MARKET DATA
-                # =========================
-
-                df = get_candles(
-
-                    pair=pair,
-
-                    interval=TIMEFRAME,
-
-                    limit=200
-                )
-
-                # =========================
-                # EMPTY CHECK
-                # =========================
-
-                if df.empty:
-
-                    print(
-                        f"No candle data for {pair}",
-                        flush=True
-                    )
-
-                    continue
-
-                print(
-                    f"Fetched {len(df)} candles",
-                    flush=True
-                )
-
-                # =========================
-                # STRATEGY ANALYSIS
-                # =========================
-
-                result = analyze(df)
-
-                print(
-                    f"Analysis result: {result}",
-                    flush=True
-                )
-
-                # =========================
-                # NO SIGNAL
-                # =========================
-
-                if not result:
-
-                    continue
-
-                if not result.get("signal"):
-
-                    print(
-                        f"No signal for {pair}",
-                        flush=True
-                    )
-
-                    continue
-
-                # =========================
-                # CONFIDENCE FILTER
-                # =========================
-
-                if (
-
-                    result["confidence"]
-
-                    < MIN_CONFIDENCE
-                ):
-
-                    print(
-                        f"Low confidence skipped",
-                        flush=True
-                    )
-
-                    continue
-
-                # =========================
-                # DUPLICATE FILTER
-                # =========================
-
-                previous_signal = (
-
-                    signal_state.last_signals.get(
-                        pair
-                    )
-                )
-
-                if (
-
-                    previous_signal
-
-                    == result["signal"]
-                ):
-
-                    print(
-                        f"Duplicate signal skipped for {pair}",
-                        flush=True
-                    )
-
-                    continue
-
-                # =========================
-                # SAVE SIGNAL
-                # =========================
-
-                signal_state.last_signals[
-                    pair
-                ] = result["signal"]
-
-                # =========================
-                # AI ANALYSIS
-                # =========================
-
-                print(
-                    f"Generating AI analysis for {pair}",
-                    flush=True
-                )
+            for pair in PAIRS:
 
                 try:
 
-                    ai_analysis = generate_ai_explanation(
-
-                        pair=pair,
-
-                        signal=result["signal"],
-
-                        rsi=result["rsi"],
-
-                        market_state=result["market_state"],
-
-                        price=result["price"]
-                    )
-
-                except Exception as ai_error:
-
                     print(
-                        f"AI ERROR: {ai_error}",
+                        f"Checking {pair}",
                         flush=True
                     )
 
-                    ai_analysis = (
-                        "AI analysis unavailable."
+                    df = get_candles(
+
+                        pair=pair,
+
+                        interval=TIMEFRAME,
+
+                        limit=200
                     )
 
-                print(
-                    "AI analysis completed",
-                    flush=True
-                )
+                    if df.empty:
 
-                # =========================
-                # EMOJIS
-                # =========================
+                        print(
+                            f"No candle data for {pair}",
+                            flush=True
+                        )
 
-                direction_emoji = (
+                        continue
 
-                    "🟢"
+                    print(
+                        f"Fetched {len(df)} candles",
+                        flush=True
+                    )
 
-                    if result["signal"] == "LONG"
+                    result = analyze(df)
 
-                    else "🔴"
-                )
+                    print(
+                        f"Analysis result: {result}",
+                        flush=True
+                    )
 
-                market_emoji = (
+                    if not result:
 
-                    "📈"
+                        continue
 
-                    if result["market_state"] == "BULLISH"
+                    if not result.get("signal"):
 
-                    else "📉"
-                )
+                        print(
+                            f"No signal for {pair}",
+                            flush=True
+                        )
 
-                # =========================
-                # TELEGRAM MESSAGE
-                # =========================
+                        continue
 
-                message = f"""
+                    if (
+
+                        result["confidence"]
+
+                        < MIN_CONFIDENCE
+                    ):
+
+                        print(
+                            "Low confidence skipped",
+                            flush=True
+                        )
+
+                        continue
+
+                    previous_signal = (
+
+                        signal_state.last_signals.get(
+                            pair
+                        )
+                    )
+
+                    if (
+
+                        previous_signal
+
+                        == result["signal"]
+                    ):
+
+                        print(
+                            f"Duplicate signal skipped for {pair}",
+                            flush=True
+                        )
+
+                        continue
+
+                    signal_state.last_signals[
+                        pair
+                    ] = result["signal"]
+
+                    signal_state.latest_signal_data = {
+
+                        "pair": pair,
+
+                        "data": result
+                    }
+
+                    # =========================
+                    # AI ANALYSIS
+                    # =========================
+
+                    print(
+                        f"Generating AI analysis for {pair}",
+                        flush=True
+                    )
+
+                    try:
+
+                        ai_analysis = generate_ai_explanation(
+
+                            pair=pair,
+
+                            signal=result["signal"],
+
+                            rsi=result["rsi"],
+
+                            market_state=result["market_state"],
+
+                            price=result["price"]
+                        )
+
+                    except Exception as ai_error:
+
+                        print(
+                            f"AI ERROR: {ai_error}",
+                            flush=True
+                        )
+
+                        ai_analysis = (
+                            "AI analysis unavailable."
+                        )
+
+                    direction_emoji = (
+
+                        "🟢"
+
+                        if result["signal"] == "LONG"
+
+                        else "🔴"
+                    )
+
+                    market_emoji = (
+
+                        "📈"
+
+                        if result["market_state"] == "BULLISH"
+
+                        else "📉"
+                    )
+
+                    # =========================
+                    # MESSAGE
+                    # =========================
+
+                    message = f"""
 {direction_emoji} PI42 {result['signal']} SIGNAL
 
 ━━━━━━━━━━━━━━
 📈 Pair: {pair}
 ⏰ Timeframe: {TIMEFRAME.upper()}
 ⚡ Suggested Leverage: {LEVERAGE}
-━━━━━━━━━━━━━━
 
 💰 Entry
 ₹{result['price']}
@@ -313,17 +301,6 @@ TP3 → ₹{result['tp3']}
 📌 RSI
 {result['rsi']}
 
-📦 Volume
-{round(result['volume'], 2)}
-
-━━━━━━━━━━━━━━
-📉 EMA Fast
-{result['ema20']}
-
-📈 EMA Slow
-{result['ema50']}
-
-━━━━━━━━━━━━━━
 🔥 Confidence
 {result['confidence']} / 10
 
@@ -331,86 +308,257 @@ TP3 → ₹{result['tp3']}
 🤖 AI Analysis
 
 {ai_analysis}
-
-━━━━━━━━━━━━━━
-⚠️ Risk Managed Setup
 """
 
-                # =========================
-                # GENERATE CHART
-                # =========================
+                    print(
+                        f"Generating chart for {pair}",
+                        flush=True
+                    )
 
-                print(
-                    f"Generating chart for {pair}",
-                    flush=True
-                )
+                    chart_path = generate_chart(
 
-                chart_path = generate_chart(
+                        df,
 
-                    df,
+                        pair
+                    )
 
-                    pair
-                )
+                    send_alert(
 
-                print(
-                    f"Chart generated: {chart_path}",
-                    flush=True
-                )
+                        message,
 
-                # =========================
-                # SEND ALERT
-                # =========================
+                        image_path=chart_path
+                    )
 
-                print(
-                    f"Sending Telegram alert for {pair}",
-                    flush=True
-                )
+                    print(
+                        f"Signal sent successfully for {pair}",
+                        flush=True
+                    )
 
-                send_alert(
+                except Exception as pair_error:
 
-                    message,
+                    print(
+                        f"\nPAIR ERROR ({pair})",
+                        flush=True
+                    )
 
-                    image_path=chart_path
-                )
+                    print(
+                        str(pair_error),
+                        flush=True
+                    )
 
-                print(
-                    f"Signal sent successfully for {pair}",
-                    flush=True
-                )
+                    traceback.print_exc()
 
-            except Exception as pair_error:
+                    continue
 
-                print(
-                    f"\nPAIR ERROR ({pair})",
-                    flush=True
-                )
+        except Exception as main_error:
 
-                print(
-                    str(pair_error),
-                    flush=True
-                )
+            print(
+                "\nMAIN LOOP ERROR",
+                flush=True
+            )
 
-                traceback.print_exc()
+            print(
+                str(main_error),
+                flush=True
+            )
 
-                continue
-
-    except Exception as main_error:
+            traceback.print_exc()
 
         print(
-            "\nMAIN LOOP ERROR",
+            f"\nSleeping for {CHECK_INTERVAL} seconds...\n",
             flush=True
         )
 
-        print(
-            str(main_error),
-            flush=True
+        time.sleep(CHECK_INTERVAL)
+
+# =========================
+# TELEGRAM COMMANDS
+# =========================
+
+async def ask_command(
+
+    update: Update,
+
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    try:
+
+        user_question = " ".join(
+            context.args
         )
 
-        traceback.print_exc()
+        if not user_question:
 
-    print(
-        f"\nSleeping for {CHECK_INTERVAL} seconds...\n",
-        flush=True
+            await update.message.reply_text(
+
+                "Usage:\n/ask your question"
+            )
+
+            return
+
+        await update.message.reply_text(
+
+            "Thinking..."
+        )
+
+        response = generate_ai_explanation(
+
+            pair="GENERAL",
+
+            signal=user_question,
+
+            rsi=0,
+
+            market_state="GENERAL",
+
+            price=0
+        )
+
+        await update.message.reply_text(
+            response
+        )
+
+    except Exception as e:
+
+        await update.message.reply_text(
+            f"AI Error: {e}"
+        )
+
+# =========================
+# MARKET COMMAND
+# =========================
+
+async def market_command(
+
+    update: Update,
+
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    latest = signal_state.latest_signal_data
+
+    if not latest:
+
+        await update.message.reply_text(
+            "No market data yet."
+        )
+
+        return
+
+    pair = latest["pair"]
+
+    data = latest["data"]
+
+    message = f"""
+📈 Latest Market Signal
+
+Pair: {pair}
+
+Signal: {data['signal']}
+
+Price: ₹{data['price']}
+
+RSI: {data['rsi']}
+
+Market State:
+{data['market_state']}
+"""
+
+    await update.message.reply_text(
+        message
     )
 
-    time.sleep(CHECK_INTERVAL)
+# =========================
+# LATEST COMMAND
+# =========================
+
+async def latest_command(
+
+    update: Update,
+
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    latest = signal_state.latest_signal_data
+
+    if not latest:
+
+        await update.message.reply_text(
+            "No signals yet."
+        )
+
+        return
+
+    pair = latest["pair"]
+
+    data = latest["data"]
+
+    message = f"""
+🔥 Latest Signal
+
+Pair: {pair}
+
+Signal: {data['signal']}
+
+Entry: ₹{data['price']}
+
+SL: ₹{data['stoploss']}
+
+TP1: ₹{data['tp1']}
+TP2: ₹{data['tp2']}
+TP3: ₹{data['tp3']}
+"""
+
+    await update.message.reply_text(
+        message
+    )
+
+# =========================
+# START SIGNAL THREAD
+# =========================
+
+signal_thread = threading.Thread(
+
+    target=signal_loop,
+
+    daemon=True
+)
+
+signal_thread.start()
+
+# =========================
+# START TELEGRAM BOT
+# =========================
+
+app = ApplicationBuilder().token(
+    BOT_TOKEN
+).build()
+
+app.add_handler(
+    CommandHandler(
+        "ask",
+        ask_command
+    )
+)
+
+app.add_handler(
+    CommandHandler(
+        "market",
+        market_command
+    )
+)
+
+app.add_handler(
+    CommandHandler(
+        "latest",
+        latest_command
+    )
+)
+
+print(
+    "Telegram AI chatbot running...",
+    flush=True
+)
+
+app.run_polling()
