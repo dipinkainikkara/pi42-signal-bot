@@ -2,6 +2,7 @@ from market_data import get_candles
 from strategy import analyze
 from telegram_alerts import send_alert
 from chart_generator import generate_chart
+from ai_assistant import generate_ai_explanation
 
 import signal_state
 import logging
@@ -10,7 +11,7 @@ import time
 
 
 # =========================
-# STARTUP PRINT
+# STARTUP
 # =========================
 
 print("BOT STARTED", flush=True)
@@ -41,6 +42,7 @@ CHECK_INTERVAL = 900
 LEVERAGE = "5x"
 
 MIN_CONFIDENCE = 6.5
+
 
 # =========================
 # PAIRS
@@ -218,6 +220,46 @@ while True:
                 ] = result["signal"]
 
                 # =========================
+                # AI ANALYSIS
+                # =========================
+
+                print(
+                    f"Generating AI analysis for {pair}",
+                    flush=True
+                )
+
+                try:
+
+                    ai_analysis = generate_ai_explanation(
+
+                        pair=pair,
+
+                        signal=result["signal"],
+
+                        rsi=result["rsi"],
+
+                        market_state=result["market_state"],
+
+                        price=result["price"]
+                    )
+
+                except Exception as ai_error:
+
+                    print(
+                        f"AI ERROR: {ai_error}",
+                        flush=True
+                    )
+
+                    ai_analysis = (
+                        "AI analysis unavailable."
+                    )
+
+                print(
+                    "AI analysis completed",
+                    flush=True
+                )
+
+                # =========================
                 # EMOJIS
                 # =========================
 
@@ -275,16 +317,22 @@ TP3 → ₹{result['tp3']}
 {round(result['volume'], 2)}
 
 ━━━━━━━━━━━━━━
-📉 EMA20
+📉 EMA Fast
 {result['ema20']}
 
-📈 EMA50
+📈 EMA Slow
 {result['ema50']}
 
 ━━━━━━━━━━━━━━
 🔥 Confidence
 {result['confidence']} / 10
 
+━━━━━━━━━━━━━━
+🤖 AI Analysis
+
+{ai_analysis}
+
+━━━━━━━━━━━━━━
 ⚠️ Risk Managed Setup
 """
 
