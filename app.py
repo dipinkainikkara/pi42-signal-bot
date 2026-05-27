@@ -53,9 +53,9 @@ logger = logging.getLogger(__name__)
 # SETTINGS
 # =========================
 
-TIMEFRAME = "15m"
+TIMEFRAME = "5m"
 
-CHECK_INTERVAL = 900
+CHECK_INTERVAL = 300
 
 LEVERAGE = "5x"
 
