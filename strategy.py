@@ -16,29 +16,29 @@ def analyze(df):
         df = df.copy()
 
         # =========================
-        # BALANCED INDICATORS
+        # CONTROLLED SCALPING
         # =========================
 
         df["ema_fast"] = EMAIndicator(
             close=df["close"],
-            window=9
+            window=7
         ).ema_indicator()
 
         df["ema_slow"] = EMAIndicator(
             close=df["close"],
-            window=21
+            window=18
         ).ema_indicator()
 
         df["rsi"] = RSIIndicator(
             close=df["close"],
-            window=10
+            window=8
         ).rsi()
 
         df["atr"] = AverageTrueRange(
             high=df["high"],
             low=df["low"],
             close=df["close"],
-            window=10
+            window=7
         ).average_true_range()
 
         # =========================
@@ -47,13 +47,17 @@ def analyze(df):
 
         df["volume_ma"] = (
             df["volume"]
-            .rolling(20)
+            .rolling(15)
             .mean()
         )
 
+        # =========================
+        # CLEAN DATA
+        # =========================
+
         df.dropna(inplace=True)
 
-        if len(df) < 30:
+        if len(df) < 25:
 
             return {
                 "signal": None
@@ -91,7 +95,7 @@ def analyze(df):
 
         signal = None
 
-        confidence = 7.0
+        confidence = 6.8
 
         market_state = "SIDEWAYS"
 
@@ -101,18 +105,18 @@ def analyze(df):
 
         strong_volume = (
             current_volume >
-            (volume_ma * 0.8)
+            (volume_ma * 0.65)
         )
 
         # =========================
-        # LONG
+        # LONG SETUP
         # =========================
 
         if (
 
             ema_fast > ema_slow
 
-            and current_rsi >= 52
+            and current_rsi >= 51
 
             and strong_volume
         ):
@@ -121,18 +125,18 @@ def analyze(df):
 
             market_state = "BULLISH"
 
-            if current_rsi > 60:
+            if current_rsi > 58:
                 confidence += 0.5
 
         # =========================
-        # SHORT
+        # SHORT SETUP
         # =========================
 
         elif (
 
             ema_fast < ema_slow
 
-            and current_rsi <= 48
+            and current_rsi <= 49
 
             and strong_volume
         ):
@@ -141,7 +145,7 @@ def analyze(df):
 
             market_state = "BEARISH"
 
-            if current_rsi < 40:
+            if current_rsi < 42:
                 confidence += 0.5
 
         else:
@@ -158,22 +162,22 @@ def analyze(df):
 
             stoploss = (
                 current_price -
-                (current_atr * 1.3)
+                (current_atr * 1.0)
             )
 
             tp1 = (
                 current_price +
-                (current_atr * 1.3)
+                (current_atr * 1.0)
             )
 
             tp2 = (
                 current_price +
-                (current_atr * 2.5)
+                (current_atr * 1.8)
             )
 
             tp3 = (
                 current_price +
-                (current_atr * 4)
+                (current_atr * 2.5)
             )
 
         # =========================
@@ -184,22 +188,22 @@ def analyze(df):
 
             stoploss = (
                 current_price +
-                (current_atr * 1.3)
+                (current_atr * 1.0)
             )
 
             tp1 = (
                 current_price -
-                (current_atr * 1.3)
+                (current_atr * 1.0)
             )
 
             tp2 = (
                 current_price -
-                (current_atr * 2.5)
+                (current_atr * 1.8)
             )
 
             tp3 = (
                 current_price -
-                (current_atr * 4)
+                (current_atr * 2.5)
             )
 
         return {
