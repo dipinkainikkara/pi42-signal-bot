@@ -17,9 +17,7 @@ from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters
+    ContextTypes
 )
 
 # =========================
@@ -64,7 +62,7 @@ LEVERAGE = "5x"
 MIN_CONFIDENCE = 6.5
 
 # =========================
-# PAIRS
+# REAL PI42 PAIRS
 # =========================
 
 PAIRS = [
@@ -206,6 +204,10 @@ def signal_loop():
 
                         continue
 
+                    # =========================
+                    # SAVE SIGNAL
+                    # =========================
+
                     signal_state.last_signals[
                         pair
                     ] = result["signal"]
@@ -252,6 +254,10 @@ def signal_loop():
                             "AI analysis unavailable."
                         )
 
+                    # =========================
+                    # EMOJIS
+                    # =========================
+
                     direction_emoji = (
 
                         "🟢"
@@ -271,16 +277,27 @@ def signal_loop():
                     )
 
                     # =========================
-                    # MESSAGE
+                    # TELEGRAM MESSAGE
                     # =========================
 
                     message = f"""
-{direction_emoji} PI42 {result['signal']} SIGNAL
+{direction_emoji} [PI42 FUTURES SIGNAL]
 
 ━━━━━━━━━━━━━━
-📈 Pair: {pair}
-⏰ Timeframe: {TIMEFRAME.upper()}
-⚡ Suggested Leverage: {LEVERAGE}
+
+📈 Pair:
+{pair}
+
+📊 Signal Type:
+{result['signal']}
+
+⏰ Timeframe:
+{TIMEFRAME.upper()}
+
+⚡ Suggested Leverage:
+{LEVERAGE}
+
+━━━━━━━━━━━━━━
 
 💰 Entry
 ₹{result['price']}
@@ -295,6 +312,7 @@ TP2 → ₹{result['tp2']}
 TP3 → ₹{result['tp3']}
 
 ━━━━━━━━━━━━━━
+
 📊 Market State
 {market_emoji} {result['market_state']}
 
@@ -305,6 +323,7 @@ TP3 → ₹{result['tp3']}
 {result['confidence']} / 10
 
 ━━━━━━━━━━━━━━
+
 🤖 AI Analysis
 
 {ai_analysis}
@@ -372,7 +391,7 @@ TP3 → ₹{result['tp3']}
         time.sleep(CHECK_INTERVAL)
 
 # =========================
-# TELEGRAM COMMANDS
+# /ASK COMMAND
 # =========================
 
 async def ask_command(
@@ -408,11 +427,11 @@ async def ask_command(
 
             signal=user_question,
 
-            rsi=0,
+            rsi=50,
 
             market_state="GENERAL",
 
-            price=0
+            price=1
         )
 
         await update.message.reply_text(
@@ -426,7 +445,7 @@ async def ask_command(
         )
 
 # =========================
-# MARKET COMMAND
+# /MARKET COMMAND
 # =========================
 
 async def market_command(
@@ -470,7 +489,7 @@ Market State:
     )
 
 # =========================
-# LATEST COMMAND
+# /LATEST COMMAND
 # =========================
 
 async def latest_command(

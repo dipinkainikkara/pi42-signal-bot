@@ -23,45 +23,69 @@ class Pi42MarketData:
 
     BASE_URL = "https://api.pi42.com/v1/market/klines"
 
+    # =========================
+    # REAL PI42 PAIRS
+    # =========================
+
     VALID_PAIRS = [
+
         "BTCINR",
+
         "ETHINR",
+
         "SOLINR"
     ]
 
     VALID_INTERVALS = [
+
         "1m",
+
         "5m",
+
         "15m",
+
         "30m",
+
         "1h",
+
         "4h",
+
         "1d"
     ]
 
     def __init__(self):
 
         self.timeout = 20
+
         self.session = self._create_session()
 
         logger.info(
             "Pi42MarketData initialized"
         )
 
+    # =========================
+    # SESSION
+    # =========================
+
     def _create_session(self):
 
         session = requests.Session()
 
         retry_strategy = Retry(
+
             total=3,
+
             backoff_factor=0.5,
+
             status_forcelist=[
+
                 429,
                 500,
                 502,
                 503,
                 504
             ],
+
             allowed_methods=["POST"]
         )
 
@@ -76,10 +100,18 @@ class Pi42MarketData:
 
         return session
 
+    # =========================
+    # FETCH KLINES
+    # =========================
+
     def get_klines(
+
         self,
+
         pair="BTCINR",
+
         interval="15m",
+
         limit=200
     ):
 
@@ -100,8 +132,11 @@ class Pi42MarketData:
             )
 
         payload = {
+
             "pair": pair,
+
             "interval": interval,
+
             "limit": limit
         }
 
@@ -114,8 +149,11 @@ class Pi42MarketData:
             time.sleep(0.2)
 
             response = self.session.post(
+
                 self.BASE_URL,
+
                 json=payload,
+
                 timeout=self.timeout
             )
 
@@ -127,9 +165,9 @@ class Pi42MarketData:
 
             data = response.json()
 
-            logger.info(
-                f"Response received with {len(data)} candles"
-            )
+            # =========================
+            # RESPONSE PARSE
+            # =========================
 
             if isinstance(data, list):
 
@@ -145,8 +183,13 @@ class Pi42MarketData:
             else:
 
                 raise Pi42MarketDataError(
-                    f"Unexpected response: {type(data)}"
+
+                    f"Unexpected response type: {type(data)}"
                 )
+
+            logger.info(
+                f"Response received with {len(klines)} candles"
+            )
 
             if not klines:
 
@@ -172,8 +215,14 @@ class Pi42MarketData:
                 f"Request failed: {e}"
             )
 
+    # =========================
+    # PARSE CANDLES
+    # =========================
+
     def _parse_klines(
+
         self,
+
         klines
     ):
 
@@ -182,6 +231,10 @@ class Pi42MarketData:
         for candle in klines:
 
             try:
+
+                # =========================
+                # DICT FORMAT
+                # =========================
 
                 if isinstance(candle, dict):
 
@@ -205,6 +258,10 @@ class Pi42MarketData:
                         "volume":
                         candle.get("volume")
                     })
+
+                # =========================
+                # LIST FORMAT
+                # =========================
 
                 elif isinstance(
                     candle,
@@ -246,13 +303,25 @@ class Pi42MarketData:
 
         df = pd.DataFrame(records)
 
+        # =========================
+        # TIMESTAMP
+        # =========================
+
         df["timestamp"] = pd.to_datetime(
+
             df["timestamp"].astype(float),
+
             unit="ms",
+
             errors="coerce"
         )
 
+        # =========================
+        # NUMERIC
+        # =========================
+
         for col in [
+
             "open",
             "high",
             "low",
@@ -261,36 +330,61 @@ class Pi42MarketData:
         ]:
 
             df[col] = pd.to_numeric(
+
                 df[col],
+
                 errors="coerce"
             )
+
+        # =========================
+        # CLEAN
+        # =========================
 
         df.dropna(inplace=True)
 
         df.sort_values(
+
             "timestamp",
+
             inplace=True
         )
 
         df.reset_index(
+
             drop=True,
+
             inplace=True
         )
 
         return df
 
+    # =========================
+    # EMPTY DF
+    # =========================
+
     def _empty_dataframe(self):
 
         return pd.DataFrame(
+
             columns=[
+
                 "timestamp",
+
                 "open",
+
                 "high",
+
                 "low",
+
                 "close",
+
                 "volume"
             ]
         )
+
+    # =========================
+    # CLOSE SESSION
+    # =========================
 
     def close(self):
 
@@ -301,9 +395,16 @@ class Pi42MarketData:
         )
 
 
+# =========================
+# PUBLIC FUNCTION
+# =========================
+
 def get_candles(
+
     pair="BTCINR",
+
     interval="15m",
+
     limit=200
 ):
 
@@ -312,8 +413,11 @@ def get_candles(
     try:
 
         return fetcher.get_klines(
+
             pair=pair,
+
             interval=interval,
+
             limit=limit
         )
 
@@ -322,13 +426,20 @@ def get_candles(
         fetcher.close()
 
 
+# =========================
+# TEST
+# =========================
+
 if __name__ == "__main__":
 
     try:
 
         df = get_candles(
+
             pair="BTCINR",
+
             interval="15m",
+
             limit=20
         )
 
